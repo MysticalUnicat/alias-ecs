@@ -9,7 +9,12 @@
 #ifndef _ALIAS_APPLICATION_MEMORY_CALLBACKS
 #define _ALIAS_APPLICATION_MEMORY_CALLBACKS
 
-/** A structure holding user provided functions for memory management. */
+#define ALIAS_APPLICATION_MEMORY_ZEROED 0x1
+
+/** A structure holding user provided functions for memory management.
+ * 
+ * memory will be zero-ed by Alias libraries.
+ */
 typedef struct aliasApplicationMemoryCallbacks {
   /** application-defined memory allocation function */
   void * (* malloc)(void * user_data, size_t size, size_t alignment);
@@ -18,7 +23,7 @@ typedef struct aliasApplicationMemoryCallbacks {
   void * (* realloc)(void * user_data, void * ptr, size_t old_size, size_t new_size, size_t alignment);
 
   /** application-defined memory free function */
-  void (* free)(void * user_data, void * ptr, size_t alignment);
+  void (* free)(void * user_data, void * ptr, size_t size, size_t alignment);
 
   /** a value to be iterpreted by the allocation and sent to each function */
   void * user_data;
@@ -36,10 +41,12 @@ typedef struct aliasApplicationMemoryCallbacks {
 /** success and error codes returned by all functions that can fail
  */
 typedef enum aeResult {
-  aeSUCCESS = 0,                 ///< command successfully completed
-  aeERROR_INVALID_ARGUMENT = -1, ///< an argument given to the command is invalid
-  aeERROR_OUT_OF_MEMORY = -2,    ///< a memory allocation has failed
-  aeERROR_DOES_NOT_EXIST = -3    ///< a requested object does not exist
+  aeSUCCESS = 0,                       ///< command successfully completed
+  aeERROR_INVALID_ARGUMENT = -1,       ///< an argument given to the command is invalid
+  aeERROR_OUT_OF_MEMORY = -2,          ///< a memory allocation has failed
+  aeERROR_DOES_NOT_EXIST = -3,         ///< a requested object does not exist
+  aeERROR_INVALID_ENTITY = -4,         ///< something inside is broken, should not happen
+  aeERROR_INVALID_LAYER = -5,          ///< something inside is broken, should not happen
 } aeResult;
 /// @}
 
@@ -77,8 +84,8 @@ void aeDestroyInstance(aeInstance instance);
 
 /// @defgroup layer Alias-ECS Layer
 /// @{
-/** layers are represented by a single 32-bit integer */
-typedef uint32_t aeLayer;
+/** layers are represented by a single 64-bit integer */
+typedef uint64_t aeLayer;
 
 /** a value indicating an invalid layer value */
 #define aeINVALID_LAYER 0xFFFFFFFF
@@ -105,17 +112,24 @@ typedef struct aeLayerCreateInfo {
  */
 aeResult aeCreateLayer(aeInstance instance, const aeLayerCreateInfo * create_info, aeLayer * layer_ptr);
 
-/** Destructor for an Layer
- *
- * This will destroy all entities remaining in the layer as well
+/** flags used to describe behaviour for destorying a layer */
+enum aeLayerDesroyFlags {
+  aeLAYER_DESTROY_REMOVE_ENTITIES = 0x1,
+};
+
+/** Destructor for a Layer
  * 
  * @param[in] instance
  *            instance that the layer was created on
  * 
+ * @param[in] unlink_entities
+ *            if zero destroy the entities in this layer as well
+ *            if non-zero, unlink the entities from the layer before destroying it
+ * 
  * @param[in] layer
  *            the layer to destroy
  */
-void aeDestroyLayer(aeInstance instance, aeLayer layer);
+aeResult aeDestroyLayer(aeInstance instance, uint32_t unlink_entities, aeLayer layer);
 /// @}
 
 /// @defgroup component Alias-ECS Component

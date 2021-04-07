@@ -4,35 +4,56 @@
 #include <getopt.h>
 #include <string.h>
 
-int g_stub_allocator_fail = 0;
-
 static void * _stub_malloc(void * ud, size_t size, size_t alignment) {
   (void)ud;
   (void)alignment;
-  if(g_stub_allocator_fail) {
+  if(g_stub_allocator.fail) {
     return NULL;
   }
-  return malloc(size);
+  void * result = malloc(size);
+  g_stub_allocator.num_allocations++;
+  g_stub_allocator.bytes_allocated += size;
+  return result;
 }
 
 static void * _stub_realloc(void * ud, void * ptr, size_t old_size, size_t new_size, size_t alignment) {
   (void)ud;
   (void)old_size;
   (void)alignment;
-  return realloc(ptr, new_size);
+  void * result = realloc(ptr, new_size);
+
+  if(ptr == NULL) {
+    g_stub_allocator.num_allocations++;
+  }
+
+  g_stub_allocator.bytes_allocated += new_size;
+  g_stub_allocator.bytes_allocated -= old_size;
+
+  return result;
 }
 
-static void _stub_free(void * ud, void * ptr, size_t alignment) {
+static void _stub_free(void * ud, void * ptr, size_t size, size_t alignment) {
   (void)ud;
+  (void)size;
   (void)alignment;
   free(ptr);
+
+  g_stub_allocator.num_frees++;
+  g_stub_allocator.bytes_freed += size;
 }
 
-struct aliasApplicationMemoryCallbacks g_stub_allocator =
-  { .malloc = _stub_malloc
-  , .realloc = _stub_realloc
-  , .free = _stub_free
-  , .user_data = NULL
+struct StubAllocator g_stub_allocator =
+  { .cb = { .malloc = _stub_malloc
+          , .realloc = _stub_realloc
+          , .free = _stub_free
+          , .user_data = &g_stub_allocator
+          }
+  , .num_allocations = 0
+  , .bytes_allocated = 0
+  , .num_frees = 0
+  , .bytes_freed = 0
+  , .fail = 0
+  , .random = 0
   };
 
 struct Test * g_tests = NULL;
@@ -40,7 +61,16 @@ struct Test * g_tests = NULL;
 void _run(int * result, struct Test * test) {
   printf("Running test %s - %s\n", test->ident, test->description);
   int success = 1;
+
+  g_stub_allocator_reset();
+  
   test->fn(&success);
+
+  if(g_stub_allocator.num_allocations != g_stub_allocator.num_frees || g_stub_allocator.bytes_allocated != g_stub_allocator.bytes_freed) {
+    fprintf(stderr, "  test %s did not cleanup it's memory (or it was leaked internally)", test->ident);
+    success = 0;
+  }
+  
   if(success == 0) {
     *result = 1;
   }

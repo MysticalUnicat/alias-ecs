@@ -28,7 +28,14 @@ else()
   add_compile_options(-Wall -Wextra -pedantic -Werror)
 endif()
 
-add_library(alias-ecs STATIC src/instance.c)
+add_library(alias-ecs STATIC
+  src/component.c
+  src/entity.c
+  src/instance.c
+  src/layer.c
+  src/memory.c
+)
+
 set_property(TARGET alias-ecs PROPERTY C_STANDARD 11)
 target_include_directories(alias-ecs
   PUBLIC SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -45,6 +52,8 @@ if(ALIAS_ECS_BUILD_TESTS)
   endmacro()
 
   alias_ecs_test(create_instance)
+  alias_ecs_test(create_layer)
+  alias_ecs_test(create_component)
 
   add_executable(alias-ecs-test ${TEST_SOURCES})
   target_link_libraries(alias-ecs-test alias-ecs)
