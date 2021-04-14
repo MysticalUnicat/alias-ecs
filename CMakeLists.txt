@@ -57,6 +57,7 @@ if(ALIAS_ECS_BUILD_TESTS)
   alias_ecs_test(create_component)
   alias_ecs_test(component_set)
   alias_ecs_test(internal_sort)
+  alias_ecs_test(internal_bsearch)
   #alias_ecs_test(spawn)
 
   add_executable(alias-ecs-test ${TEST_SOURCES})

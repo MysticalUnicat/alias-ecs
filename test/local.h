@@ -62,5 +62,14 @@ extern struct Test * g_tests;
     }                                                                                \
   } while(0) 
 
+#define TEST_NE(A, B, FMT, ...)                                                      \
+  do {                                                                               \
+    if((A) == (B)) {                                                                 \
+      fprintf(stderr, "%16s:%i - " FMT "\n", _test_ident, __LINE__, ## __VA_ARGS__); \
+      *_success = 0;                                                                 \
+      return;                                                                        \
+    }                                                                                \
+  } while(0) 
+
 #endif // _ALIAS_ECS_TEST_LOCAL_H_
 

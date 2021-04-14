@@ -75,7 +75,7 @@ static inline size_t size_t_min(size_t a, size_t b) {
 
 static size_t _partition(enum PivotScheme pivot_scheme, enum PartitionScheme partition_scheme, uint8_t * base, size_t size, size_t lo, size_t hi
                         , int (*compar)(void *, const void *, const void *), void * ud) {
-  size_t pivot, mid = (hi >> 1) + (lo >> 1);
+  size_t pivot, mid = lo + (hi - lo)/2;
 
   switch(pivot_scheme) {
   case PivotLo:
@@ -200,16 +200,19 @@ void alias_ecs_quicksort(void * base, size_t num, size_t size, int (*compar)(voi
 
 // naive bsearch
 void * alias_ecs_bsearch(const void * key, const void * base, size_t num, size_t size, int (*compar)(void *, const void *, const void *), void * ud) {
+  if(key == NULL || base == NULL || num == 0 || size == 0 || compar == NULL) {
+    return NULL;
+  }
   const uint8_t * b = (const uint8_t *)base;
   size_t lo = 0;
   size_t hi = num - 1;
   while(lo <= hi) {
-    size_t mid = (lo >> 1) + (hi >> 1);
+    size_t mid = lo + (hi - lo)/2;
     const void * item = b + mid * size;
     int cmp = compar(ud, key, item);
-    if(cmp < 0) {
+    if(cmp > 0) {
       lo = mid + 1;
-    } else if(cmp > 0) {
+    } else if(cmp < 0) {
       hi = mid - 1;
     } else {
       return (void *)item;
