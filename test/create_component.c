@@ -2,7 +2,7 @@
 
 TEST(create_component, "aeRegisterComponent") {
   aeInstance instance;
-  TEST_EQ(aeCreateInstance(NULL, &instance), aeSUCCESS, "unexpected error while creating instance");
+  TEST_EQ(aeCreateInstance(&g_stub_allocator.cb, &instance), aeSUCCESS, "unexpected error while creating instance");
 
   aeComponent component;
 

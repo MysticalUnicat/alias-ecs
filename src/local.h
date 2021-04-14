@@ -8,6 +8,9 @@
 #include <string.h>
 
 #define UNUSED(X) (void)X
+#define sizeof_alignof(X) sizeof(X), alignof(X)
+
+typedef uint32_t aeArchetype;
 
 #define Vector(T) { uint32_t capacity; uint32_t length; T * data; }
 
@@ -22,6 +25,26 @@ struct aeComponentData {
   uint32_t size;
   uint32_t num_required_components;
   const aeComponent * required_components;
+};
+
+struct aeComponentSet {
+  uint32_t count;
+  uint32_t * index;
+};
+
+struct aeArchetypeData {
+  struct aeComponentSet components;
+
+  uint32_t * offset_size;
+
+  uint32_t entity_size;
+  uint32_t entities_per_block;
+
+  uint32_t next_index;
+  struct Vector(uint32_t) free_indexes;
+
+  uint32_t num_blocks;
+  void ** blocks;
 };
 
 struct aeInstance {
@@ -47,6 +70,15 @@ struct aeInstance {
     uint32_t * archetype_code;
   } entity;
 
+  // archetypes are 'sorted' by component sets
+  // created as needed
+  struct {
+    uint32_t capacity;
+    uint32_t length;
+    uint32_t * components_index;
+    struct aeArchetypeData * data;
+  } archetype;
+
   struct Vector(struct aeComponentData) component;
 };
 
@@ -59,6 +91,23 @@ struct aeInstance {
 aeResult alias_ecs_malloc(aeInstance instance, size_t size, size_t alignment, void ** out_ptr);
 aeResult alias_ecs_realloc(aeInstance instance, void * ptr, size_t old_size, size_t new_size, size_t alignment, void ** out_ptr);
 void alias_ecs_free(aeInstance instance, void * ptr, size_t size, size_t alignment);
+
+void alias_ecs_quicksort(void * base, size_t num, size_t size, int (*compar)(void *, const void *, const void *), void * ud);
+void * alias_ecs_bsearch(const void * key, const void * base, size_t num, size_t size, int (*compar)(void *, const void *, const void *), void * ud);
+
+#define ALLOC(I, C, P)          return_if_ERROR(alias_ecs_malloc(I, (C) * sizeof_alignof(*P), (void **)&P))
+#define RELOC(I, oldC, newC, P) return_if_ERROR(alias_ecs_realloc(I, P, (oldC) * sizeof(*P), (newC) * sizeof_alignof(*P), (void **)&P))
+#define FREE(I, C, P)           alias_ecs_free(I, P, (C) * sizeof_alignof(*P))
+
+// ============================================================================
+// component.c
+aeResult aeComponentSet_init(aeInstance instance, struct aeComponentSet * set, uint32_t count, const aeComponent * components);
+aeResult aeComponentSet_add(aeInstance instance, struct aeComponentSet * dst, const struct aeComponentSet * src, aeComponent component);
+aeResult aeComponentset_remove(aeInstance instance, struct aeComponentSet * dst, const struct aeComponentSet * src, aeComponent component);
+uint32_t aeComponentSet_order_of(const struct aeComponentSet * set, aeComponent component);
+int aeComponentSet_contains(const struct aeComponentSet * set, aeComponent component);
+int aeComponentSet_intersects(const struct aeComponentSet * a, const struct aeComponentSet * b);
+void aeComponentSet_free(aeInstance instance, struct aeComponentSet * set);
 
 // ============================================================================
 // Vector utility functions and macros
@@ -129,6 +178,10 @@ aeResult alias_ecs_set_layer(aeInstance instance, uint32_t entity_index, uint32_
 aeResult alias_ecs_entity_validate(const aeInstance instance, aeEntity entity, uint32_t * index_ptr);
 aeResult alias_ecs_entity_create(aeInstance instance, aeEntity * entity_ptr);
 aeResult alias_ecs_entity_free(aeInstance instance, uint32_t entity_id);
+
+// ============================================================================
+// archetype.c
+aeResult alias_ecs_resolve_archetype(aeInstance instance, struct aeComponentSet components, aeArchetype * out_ptr);
 
 #endif
 

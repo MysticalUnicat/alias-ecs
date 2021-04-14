@@ -29,6 +29,7 @@ else()
 endif()
 
 add_library(alias-ecs STATIC
+  src/archetype.c
   src/component.c
   src/entity.c
   src/instance.c
@@ -54,6 +55,9 @@ if(ALIAS_ECS_BUILD_TESTS)
   alias_ecs_test(create_instance)
   alias_ecs_test(create_layer)
   alias_ecs_test(create_component)
+  alias_ecs_test(component_set)
+  alias_ecs_test(internal_sort)
+  #alias_ecs_test(spawn)
 
   add_executable(alias-ecs-test ${TEST_SOURCES})
   target_link_libraries(alias-ecs-test alias-ecs)

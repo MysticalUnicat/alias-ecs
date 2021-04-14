@@ -55,6 +55,8 @@ void aeDestroyInstance(aeInstance instance) {
   void * user_data = instance->mem.user_data;
   void (*free)(void *, void *, size_t, size_t) = instance->mem.free;
 
+
+
   if(instance->layer.capacity > 0) {
     Vector_free(instance, &instance->layer.free_indexes);
 

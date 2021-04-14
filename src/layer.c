@@ -21,12 +21,6 @@ static int _compare_entity_index(const void * ap, const void * bp) {
   return a - b;
 }
 
-static int _bsearch_entity_index(const void * ap, const void * bp) {
-  uint32_t a = *(uint32_t *)ap;
-  uint32_t b = *(uint32_t *)bp;
-  return a - b;
-}
-
 static void _linear_remove_entity(struct aeLayerData * data, uint32_t entity_index) {
   for(uint32_t i = 0; i < data->entities.length; i++) {
     if(data->entities.data[i] == entity_index) {
@@ -58,7 +52,7 @@ void alias_ecs_unset_layer(aeInstance instance, uint32_t entity_index) {
 
   // the case where the entity is not found should not happen
   // TODO: record such case
-  uint32_t * index_ptr = Vector_bsearch(&data->entities, _bsearch_entity_index, &entity_index);
+  uint32_t * index_ptr = Vector_bsearch(&data->entities, _compare_entity_index, &entity_index);
   if(index_ptr != NULL) {
     if(data->entities.length < MAX_ENTITIES_FOR_LINEAR_OPS) {
       Vector_remove_at(&data->entities, index_ptr - data->entities.data);
@@ -104,15 +98,11 @@ aeResult aeCreateLayer(aeInstance instance, const aeLayerCreateInfo * create_inf
   if(instance->layer.length > instance->layer.capacity) {
     uint32_t old_capacity = instance->layer.capacity;
     uint32_t new_capacity = instance->layer.length + (instance->layer.length >> 1);
-    uint32_t gen_size = sizeof(*instance->layer.generation);
-    uint32_t dat_size = sizeof(*instance->layer.data);
-    return_if_ERROR(alias_ecs_realloc(instance, instance->layer.generation, gen_size * old_capacity, gen_size * new_capacity,
-                                      alignof(*instance->layer.generation), (void **)&instance->layer.generation));
-    return_if_ERROR(alias_ecs_realloc(instance, instance->layer.data, dat_size * old_capacity, dat_size * new_capacity, alignof(*instance->layer.data),
-                                      (void **)&instance->layer.data));
+    RELOC(instance, old_capacity, new_capacity, instance->layer.generation);
+    RELOC(instance, old_capacity, new_capacity, instance->layer.data);
     instance->layer.capacity = new_capacity;
   }
-
+ 
   struct aeLayerData * data = instance->layer.data + index;
 
   if(create_info->max_entities > 0) {

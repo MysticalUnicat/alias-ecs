@@ -2,7 +2,7 @@
 
 TEST(create_layer, "aeCreateLayer") {
   aeInstance instance;
-  TEST_EQ(aeCreateInstance(NULL, &instance), aeSUCCESS, "error while setting up testing instance");
+  TEST_EQ(aeCreateInstance(&g_stub_allocator.cb, &instance), aeSUCCESS, "error while setting up testing instance");
 
   aeLayer unbounded, bounded, non_destroyed;
 
