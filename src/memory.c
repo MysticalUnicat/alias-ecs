@@ -23,7 +23,9 @@ aeResult alias_ecs_realloc(aeInstance instance, void * ptr, size_t old_size, siz
 }
 
 void alias_ecs_free(aeInstance instance, void * ptr, size_t size, size_t alignment) {
-  instance->mem.free(instance->mem.user_data, ptr, size, alignment);
+  if(ptr != NULL && size > 0) {
+    instance->mem.free(instance->mem.user_data, ptr, size, alignment);
+  }
 }
 
 // naive qsort

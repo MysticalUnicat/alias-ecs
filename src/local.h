@@ -32,6 +32,15 @@ struct aeComponentSet {
   uint32_t * index;
 };
 
+#define TOTAL_BLOCK_SIZE (1 << 16)
+#define BLOCK_DATA_SIZE (TOTAL_BLOCK_SIZE /* - (sizeof(uint16_t) * 2) */)
+
+struct aeDataBlock {
+  //uint16_t live_count;
+  //uint16_t fill_count;
+  uint8_t data[BLOCK_DATA_SIZE];
+};
+
 struct aeArchetypeData {
   struct aeComponentSet components;
 
@@ -43,8 +52,7 @@ struct aeArchetypeData {
   uint32_t next_index;
   struct Vector(uint32_t) free_indexes;
 
-  uint32_t num_blocks;
-  void ** blocks;
+  struct Vector(struct aeDataBlock *) blocks;
 };
 
 struct aeInstance {
@@ -83,6 +91,27 @@ struct aeInstance {
 };
 
 // ============================================================================
+#define ENTITY_GENERATION(I, E)             (I)->entity.generation[E]
+#define ENTITy_LAYER_INDEX(I, E)            (I)->entity.layer_index[E]
+#define ENTITY_ARCHETYPE_INDEX(I, E)        (I)->entity.archetype_index[E]
+#define ENTITY_ARCHETYPE_CODE(I, E)         (I)->entity.archetype_code[E]
+#define ENTITY_ARCHETYPE_BLOCK_INDEX(I, E)  (ENTITY_ARCHETYPE_CODE(I, E) >> 16)
+#define ENTITY_ARCHETYPE_BLOCK_OFFSET(I, E) (ENTITY_ARCHETYPE_CODE(I, E) & 0xFFFF)
+#define ENTITY_ARCHETYPE_DATA(I, E)         (&(I)->archetype.data[ENTITY_ARCHETYPE_INDEX(I, E)])
+#define ENTITY_DATA_BLOCK(I, E)             ENTITY_ARCHETYPE_DATA(I, E)->blocks.data[ENTITY_ARCHETYPE_BLOCK_INDEX(I, E)]
+#define ENTITY_DATA_BLOCK_DATA(I, E)        (ENTITY_DATA_BLOCK(I, E)->data)
+#define ENTITY_DATA_ENTITY_INDEX(I, E)      ((uint32_t *)ENTITY_DATA_BLOCK_DATA(I, E))[ENTITY_ARCHETYPE_BLOCK_OFFSET(I, E)]
+
+static inline void * alias_ecs_raw_access(aeInstance instance, uint32_t archetype_index, uint32_t component_index, uint32_t block_index, uint32_t block_offset) {
+  struct aeArchetypeData * archetype = &instance->archetype.data[archetype_index];
+  struct aeDataBlock * block = archetype->blocks.data[block_index];
+  uint32_t offset_size = archetype->offset_size[component_index];
+  uint32_t offset = offset_size >> 16;
+  uint32_t size = offset_size & 0xFFFF;
+  return (void *)(block->data + (uintptr_t)offset + ((uintptr_t)block_offset * size));
+}
+
+// ============================================================================
 #define return_if_ERROR(C) do { aeResult __r = C; if(__r < aeSUCCESS) return __r; } while(0)
 #define return_ERROR_INVALID_ARGUMENT_if(X) do { if(X) { return aeERROR_INVALID_ARGUMENT; } } while(0)
 
@@ -97,7 +126,7 @@ void * alias_ecs_bsearch(const void * key, const void * base, size_t num, size_t
 
 #define ALLOC(I, C, P)          return_if_ERROR(alias_ecs_malloc(I, (C) * sizeof_alignof(*P), (void **)&P))
 #define RELOC(I, oldC, newC, P) return_if_ERROR(alias_ecs_realloc(I, P, (oldC) * sizeof(*P), (newC) * sizeof_alignof(*P), (void **)&P))
-#define FREE(I, C, P)           alias_ecs_free(I, P, (C) * sizeof_alignof(*P))
+#define FREE(I, C, P)           alias_ecs_free(I, (void *)P, (C) * sizeof_alignof(*P))
 
 // ============================================================================
 // component.c
@@ -182,6 +211,8 @@ aeResult alias_ecs_entity_free(aeInstance instance, uint32_t entity_id);
 // ============================================================================
 // archetype.c
 aeResult alias_ecs_resolve_archetype(aeInstance instance, struct aeComponentSet components, aeArchetype * out_ptr);
+aeResult alias_ecs_unset_archetype(aeInstance instance, uint32_t entity_index);
+aeResult alias_ecs_set_archetype(aeInstance instance, uint32_t entity_index, uint32_t archetype_index);
 
 #endif
 

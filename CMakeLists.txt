@@ -58,7 +58,10 @@ if(ALIAS_ECS_BUILD_TESTS)
   alias_ecs_test(component_set)
   alias_ecs_test(internal_sort)
   alias_ecs_test(internal_bsearch)
-  #alias_ecs_test(spawn)
+  alias_ecs_test(internal_archetype)
+  alias_ecs_test(spawn)
+
+  list(REVERSE TEST_SOURCES)
 
   add_executable(alias-ecs-test ${TEST_SOURCES})
   target_link_libraries(alias-ecs-test alias-ecs)

@@ -55,8 +55,6 @@ void aeDestroyInstance(aeInstance instance) {
   void * user_data = instance->mem.user_data;
   void (*free)(void *, void *, size_t, size_t) = instance->mem.free;
 
-
-
   if(instance->layer.capacity > 0) {
     Vector_free(instance, &instance->layer.free_indexes);
 
@@ -69,16 +67,27 @@ void aeDestroyInstance(aeInstance instance) {
   }
 
   for(uint32_t i = 0; i < instance->component.length; i++) {
-    struct aeComponentData * data = &instance->component.data[i];
-    if(data->num_required_components > 0) {
-      alias_ecs_free( instance
-                    , (void *)data->required_components
-                    , sizeof(*data->required_components) * data->num_required_components
-                    , alignof(*data->required_components)
-                    );
-    }
+    FREE(instance, instance->component.data[i].num_required_components, instance->component.data[i].required_components);
   }
   Vector_free(instance, &instance->component);
+
+  FREE(instance, instance->entity.capacity, instance->entity.generation);
+  FREE(instance, instance->entity.capacity, instance->entity.layer_index);
+  FREE(instance, instance->entity.capacity, instance->entity.archetype_index);
+  FREE(instance, instance->entity.capacity, instance->entity.archetype_code);
+
+  for(uint32_t i = 0; i < instance->archetype.length; i++) {
+    struct aeArchetypeData * archetype = &instance->archetype.data[i];
+    aeComponentSet_free(instance, &archetype->components);
+    FREE(instance, archetype->components.count, archetype->offset_size);
+    Vector_free(instance, &archetype->free_indexes);
+    for(uint32_t j = 0; j < archetype->blocks.length; j++) {
+      FREE(instance, 1, archetype->blocks.data[j]);
+    }
+    Vector_free(instance, &archetype->blocks);
+  }
+  FREE(instance, instance->archetype.capacity, instance->archetype.components_index);
+  FREE(instance, instance->archetype.capacity, instance->archetype.data);
   
   free(user_data, instance, sizeof(*instance), alignof(*instance));
 }
