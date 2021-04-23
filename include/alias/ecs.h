@@ -6,30 +6,17 @@
 
 /// @defgroup alias Alias
 /// @{
-#ifndef _ALIAS_APPLICATION_MEMORY_CALLBACKS
-#define _ALIAS_APPLICATION_MEMORY_CALLBACKS
-
-#define ALIAS_APPLICATION_MEMORY_ZEROED 0x1
-
-/** A structure holding user provided functions for memory management.
- * 
- * memory will be zero-ed by Alias libraries.
- */
-typedef struct aliasApplicationMemoryCallbacks {
-  /** application-defined memory allocation function */
-  void * (* malloc)(void * user_data, size_t size, size_t alignment);
-
-  /** application-defined memory reallocation function */
-  void * (* realloc)(void * user_data, void * ptr, size_t old_size, size_t new_size, size_t alignment);
-
-  /** application-defined memory free function */
-  void (* free)(void * user_data, void * ptr, size_t size, size_t alignment);
-
-  /** a value to be iterpreted by the allocation and sent to each function */
-  void * user_data;
-} aliasApplicationMemoryCallbacks;
-
-#endif // _ALIAS_APPLICATION_MEMORY_CALLBACKS
+#ifndef _ALIAS_CLOSURE
+#define _ALIAS_CLOSURE
+#define alias_Closure(FN_T) struct { FN_T fn; void * ud; }
+#define alias_Closure_call(C, ...) (C)->fn((C)->ud, ## __VA_ARGS__)
+#endif
+  
+#ifndef _ALIAS_APPLICATION_ALLOCATION_CALLBACK
+#define _ALIAS_APPLICATION_ALLOCATION_CALLBACK
+typedef void * (* alias_AllocationFn)(void * ud, void * ptr, size_t old_size, size_t new_size, size_t alignment);
+typedef alias_Closure(alias_AllocationFn) alias_MemoryAllocationCallback;
+#endif // _ALIAS_APPLICATION_ALLOCATION_CALLBACK
 /// @}
 
 /// @defgroup ecs Alias-ECS
@@ -40,21 +27,22 @@ typedef struct aliasApplicationMemoryCallbacks {
 
 /** success and error codes returned by all functions that can fail
  */
-typedef enum aeResult {
-  aeSUCCESS = 0,                       ///< command successfully completed
-  aeERROR_INVALID_ARGUMENT = -1,       ///< an argument given to the command is invalid
-  aeERROR_OUT_OF_MEMORY = -2,          ///< a memory allocation has failed
-  aeERROR_DOES_NOT_EXIST = -3,         ///< a requested object does not exist
-  aeERROR_INVALID_ENTITY = -4,         ///< something inside is broken, should not happen
-  aeERROR_INVALID_LAYER = -5,          ///< something inside is broken, should not happen
-} aeResult;
+typedef enum alias_ecs_Result {
+  ALIAS_ECS_SUCCESS = 0,                       ///< command successfully completed
+  ALIAS_ECS_ERROR_INVALID_ARGUMENT = -1,       ///< an argument given to the command is invalid
+  ALIAS_ECS_ERROR_OUT_OF_MEMORY = -2,          ///< a memory allocation has failed
+  ALIAS_ECS_ERROR_DOES_NOT_EXIST = -3,         ///< a requested object does not exist
+  ALIAS_ECS_ERROR_INVALID_ENTITY = -4,         ///< something inside is broken, should not happen
+  ALIAS_ECS_ERROR_INVALID_LAYER = -5,          ///< something inside is broken, should not happen
+  ALIAS_ECS_ERROR_COMPONENT_EXISTS = -6,
+} alias_ecs_Result;
 /// @}
 
 /// @defgroup instance Alias-ECS Instance
 /// @{
-/** opaque pointer to an Alias ECS Instance
+/** opaque struct for Alias ECS Instance
  */
-typedef struct aeInstance * aeInstance;
+typedef struct alias_ecs_Instance alias_ecs_Instance;
 
 /** Create an Alias-ECS instance.
  * 
@@ -70,7 +58,10 @@ typedef struct aeInstance * aeInstance;
  *  - aeERROR_INVALID_ARGUMENT instance_ptr is NULL
  *  - aeERROR_OUT_OF_MEMORY a memory allocation failed
  */
-aeResult aeCreateInstance(const aliasApplicationMemoryCallbacks * memory_callbacks, aeInstance * instance_ptr);
+alias_ecs_Result alias_ecs_create_instance(
+    const alias_MemoryAllocationCallback * memory_callback
+  , alias_ecs_Instance *                 * instance_ptr
+);
 
 /** Destructor for an Instance
  * 
@@ -79,22 +70,22 @@ aeResult aeCreateInstance(const aliasApplicationMemoryCallbacks * memory_callbac
  * @param[in] instance
  *            The instance to destory
  */
-void aeDestroyInstance(aeInstance instance);
+void alias_ecs_destroy_instance(alias_ecs_Instance * instance);
 /// @}
 
 /// @defgroup layer Alias-ECS Layer
 /// @{
 /** layers are represented by a single 64-bit integer */
-typedef uint64_t aeLayer;
+typedef uint64_t alias_ecs_LayerHandle;
 
 /** a value indicating an invalid layer value */
-#define aeINVALID_LAYER 0xFFFFFFFF
+#define ALIAS_ECS_INVALID_LAYER 0xFFFFFFFF
 
 /** data for creating a layer */
-typedef struct aeLayerCreateInfo {
+typedef struct alias_ecs_LayerCreateInfo {
   /** if this is non-zero, indicate the number of entities and max entities to allocate memory for */
   uint32_t max_entities;
-} aeLayerCreateInfo;
+} alias_ecs_LayerCreateInfo;
 
 /** Create a Alias-ECS Layer
  *
@@ -110,12 +101,16 @@ typedef struct aeLayerCreateInfo {
  *  - aeSUCCESS the layer was created
  *  - aeERROR_OUT_OF_MEMORY unable to allocate memory for this layer
  */
-aeResult aeCreateLayer(aeInstance instance, const aeLayerCreateInfo * create_info, aeLayer * layer_ptr);
+alias_ecs_Result alias_ecs_create_layer(
+    alias_ecs_Instance              * instance
+  , const alias_ecs_LayerCreateInfo * create_info
+  , alias_ecs_LayerHandle           * layer_handle_ptr
+);
 
 /** flags used to describe behaviour for destorying a layer */
-enum aeLayerDesroyFlags {
-  aeLAYER_DESTROY_REMOVE_ENTITIES = 0x1,
-};
+typedef enum alias_ecs_LayerDestroyFlags {
+  ALIAS_ECS_LAYER_DESTROY_REMOVE_ENTITIES = 0x1,
+} alias_ecs_LayerDestroyFlags;
 
 /** Destructor for a Layer
  * 
@@ -129,16 +124,29 @@ enum aeLayerDesroyFlags {
  * @param[in] layer
  *            the layer to destroy
  */
-aeResult aeDestroyLayer(aeInstance instance, uint32_t unlink_entities, aeLayer layer);
+alias_ecs_Result alias_ecs_destroy_layer(
+    alias_ecs_Instance          * instance
+  , const alias_ecs_LayerHandle   layer_handle
+  , alias_ecs_LayerDestroyFlags   flags
+);
 /// @}
 
 /// @defgroup component Alias-ECS Component
 /// @{
 /** components are represented by a single 32-bit integer */
-typedef uint32_t aeComponent;
+
+typedef uint32_t alias_ecs_ComponentHandle;
+
+/** flags used to describe behaviour of a component when creating it */
+typedef enum alias_ecs_ComponentCreateFlags {
+  ALIAS_ECS_COMPONENT_CREATE_NOT_NULL = 0x1,
+} alias_ecs_ComponentCreateFlags;
 
 /** creation data for a component */
-typedef struct aeComponentCreateInfo {
+typedef struct alias_ecs_ComponentCreateInfo {
+  /** flags */
+ alias_ecs_ComponentCreateFlags flags;
+ 
   /** size of the data structure for this component */
   size_t size;
 
@@ -146,8 +154,8 @@ typedef struct aeComponentCreateInfo {
   uint32_t num_required_components;
 
   /** pointer to memory of `num_required_components` aeComponents */
-  const aeComponent * required_components;
-} aeComponentCreateInfo;
+  const alias_ecs_ComponentHandle * required_components;
+} alias_ecs_ComponentCreateInfo;
   
 /** register a component with the instance
  *
@@ -164,18 +172,22 @@ typedef struct aeComponentCreateInfo {
  *  - aeSUCCESS
  *  - aeERROR_INVALID_ARGUMENT 
  */
-aeResult aeRegisterComponent(aeInstance instance, const aeComponentCreateInfo * create_info, aeComponent * component_ptr);
+alias_ecs_Result alias_ecs_register_component(
+    alias_ecs_Instance                  * instance
+  , const alias_ecs_ComponentCreateInfo * create_info
+  , alias_ecs_ComponentHandle           * component_ptr
+);
 /// @}
 
 /// @defgroup entity Alias-ECS Entity
 /// @{
 /** entities are represented by a single 64-bit integer */
-typedef uint64_t aeEntity;
+typedef uint64_t alias_ecs_EntityHandle;
 
 /** this structure is used exclusivly by aeEntitySpawnInfo */
-typedef struct aeEntitySpawnComponent {
+typedef struct alias_ecs_EntitySpawnComponent {
   /** the component this data represents */
-  aeComponent component;
+  alias_ecs_ComponentHandle component;
 
   /** the stride of the memory pointed to by data
    * 
@@ -189,12 +201,12 @@ typedef struct aeEntitySpawnComponent {
    * must be component size x aeEntitySpawnInfo::count in size at minimum
    */
   const void * data;
-} aeEntitySpawnComponent;
+} alias_ecs_EntitySpawnComponent;
 
 /** used for aeSpawn */
-typedef struct aeEntitySpawnInfo {
+typedef struct alias_ecs_EntitySpawnInfo {
   /** the layer the entities will spawn into. can be aeINVALID_LAYER */
-  aeLayer layer;
+  alias_ecs_LayerHandle layer;
 
   /** the number of entities to spawn */
   uint32_t count;
@@ -203,8 +215,8 @@ typedef struct aeEntitySpawnInfo {
   uint32_t num_components;
 
   /** pointer to num_components component data */
-  const aeEntitySpawnComponent * components;
-} aeEntitySpawnInfo;
+  const alias_ecs_EntitySpawnComponent * components;
+} alias_ecs_EntitySpawnInfo;
 
 /** spawn entities
  * 
@@ -225,29 +237,62 @@ typedef struct aeEntitySpawnInfo {
  *  - aeERROR_OUT_OF_MEMORY    ...
  *  - aeERROR_INVALID_ARGUMENT instance is NULL
  */
-aeResult aeSpawn(aeInstance instance, const aeEntitySpawnInfo * spawn_info, aeEntity * entities_ptr);
+alias_ecs_Result alias_ecs_spawn(
+    alias_ecs_Instance              * instance
+  , const alias_ecs_EntitySpawnInfo * spawn_info
+  , alias_ecs_EntityHandle          * entities_ptr
+);
 
 /** add data to an entity's component
  */
-aeResult aeAddEntityComponent(aeInstance instance, aeEntity entity, aeComponent component, const void * data);
+alias_ecs_Result alias_ecs_add_component_to_entity(
+    alias_ecs_Instance        * instance
+  , alias_ecs_EntityHandle      entity
+  , alias_ecs_ComponentHandle   component
+  , const void                * data
+);
 
 /** remove data from an entitiy */
-aeResult aeRemoveEntityComponent(aeInstance instance, aeEntity entity, aeComponent component);
+alias_ecs_Result alias_ecs_remove_component_from_entity(
+    alias_ecs_Instance        * instance
+  , alias_ecs_EntityHandle      entity
+  , alias_ecs_ComponentHandle   component
+);
 
 /** get a writable pointer to component data for an entity */
-aeResult aeWriteEntityComponent(aeInstance instance, aeEntity entity, aeComponent component, void ** out_ptr);
+alias_ecs_Result alias_ecs_write_entity_component(
+    alias_ecs_Instance        * instance
+  , alias_ecs_EntityHandle      entity
+  , alias_ecs_ComponentHandle   component
+  , void *                    * out_ptr
+);
 
 /** get a read-only pointer to component data for an entity */
-aeResult aeReadEntityComponent(aeInstance instance, aeEntity entity, aeComponent component, const void ** out_ptr);
+alias_ecs_Result alias_ecs_read_entity_component(
+    alias_ecs_Instance        * instance
+  , alias_ecs_EntityHandle      entity
+  , alias_ecs_ComponentHandle   component
+  , const void *              * out_ptr
+);
 
 /** kill an entity, removes it globally */
-aeResult aeDespawn(aeInstance instance, uint32_t num_entities, const aeEntity * entities);
+alias_ecs_Result alias_ecs_despawn(
+    alias_ecs_Instance           * instance
+  , uint32_t                       num_entities
+  , const alias_ecs_EntityHandle * entities
+);
 /// @}
 
 /// @defgroup query Alias-ECS Query
 /// @{
  
 /// @}
+
+#ifdef ALIAS_ECS_SHORT_NAMES
+// neat idea?
+//#define aeInstance alias_ecs_Instance
+//#define ae_create_instance alias_ecs_create_instance
+#endif
 
 #endif // _ALIAS_ECS_H_
 

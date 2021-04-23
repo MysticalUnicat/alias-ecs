@@ -5,40 +5,44 @@ struct Position {
   int y;
 };
 
-TEST(spawn, "aeSpawn") {
-  aeInstance instance;
-  TEST_EQ(aeCreateInstance(NULL, &instance), aeSUCCESS, "error while setting up testing instance");
+TEST(spawn, "alias_ecs_spawn") {
+  alias_ecs_Instance * instance;
+  TEST_EQ(alias_ecs_create_instance(NULL, &instance), ALIAS_ECS_SUCCESS, "error while setting up testing instance");
 
-  aeComponent Position_component;
-  TEST_EQ( aeRegisterComponent(instance, &(aeComponentCreateInfo) { .size = sizeof(struct Position) }, &Position_component)
-         , aeSUCCESS
-         , "error while setting up position component"
-         );
+  alias_ecs_ComponentHandle Position_component;
+  TEST_EQ(
+      alias_ecs_register_component(
+          instance
+        , &(alias_ecs_ComponentCreateInfo) { .size = sizeof(struct Position) }
+        , &Position_component
+        )
+    , ALIAS_ECS_SUCCESS
+    , "error while setting up position component"
+    );
 
-  aeEntity entity;
+  alias_ecs_EntityHandle entity;
 
   TEST_EQ(
-    aeSpawn(instance, &(aeEntitySpawnInfo) {
-      .layer = aeINVALID_LAYER,
-      .count = 1,
-      .num_components = 1,
-      .components = (aeEntitySpawnComponent[]) {
-        {
-          .component = Position_component,
-          .stride = 0,
-          .data = (const void *)(struct Position[]) {
-            {
-              .x = 0,
-              .y = 0
-            }
+      alias_ecs_spawn(
+          instance
+        , &(alias_ecs_EntitySpawnInfo) {
+            .layer = ALIAS_ECS_INVALID_LAYER
+          , .count = 1
+          , .num_components = 1
+          , .components = (alias_ecs_EntitySpawnComponent[]) {
+                {
+                    .component = Position_component
+                  , .stride = 0
+                  , .data = (const void *)(struct Position[]) { { 0, 0 } }
+                  }
+              }
           }
-        }
-      }
-    }, &entity)
-    , aeSUCCESS
+        , &entity
+        )
+    , ALIAS_ECS_SUCCESS
     , "unexpected error from simple spawn"
     );
 
-  aeDestroyInstance(instance);
+  alias_ecs_destroy_instance(instance);
 }
 

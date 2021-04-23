@@ -60,6 +60,7 @@ if(ALIAS_ECS_BUILD_TESTS)
   alias_ecs_test(internal_bsearch)
   alias_ecs_test(internal_archetype)
   alias_ecs_test(spawn)
+  alias_ecs_test(add_component)
 
   list(REVERSE TEST_SOURCES)
 

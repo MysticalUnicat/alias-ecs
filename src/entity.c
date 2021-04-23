@@ -1,23 +1,30 @@
 #include "local.h"
 
-aeResult alias_ecs_entity_validate(const aeInstance instance, aeEntity entity, uint32_t * index_ptr) {
+alias_ecs_Result alias_ecs_validate_entity_handle(
+    const alias_ecs_Instance * instance
+  , alias_ecs_EntityHandle     entity
+  , uint32_t                 * index_ptr
+) {
   uint32_t index = (uint32_t)(entity & 0xFFFFFFFF);
   uint32_t generation = (uint32_t)(entity >> 31);
   if(index >= instance->entity.length) {
-    return aeERROR_INVALID_ENTITY;
+    return ALIAS_ECS_ERROR_INVALID_ENTITY;
   }
   if(generation != instance->entity.generation[index]) {
-    return aeERROR_INVALID_ENTITY;
+    return ALIAS_ECS_ERROR_INVALID_ENTITY;
   }
   *index_ptr = index;
-  return aeSUCCESS;
+  return ALIAS_ECS_SUCCESS;
 }
 
-aeResult alias_ecs_entity_create(aeInstance instance, aeEntity * entity_ptr) {
+alias_ecs_Result alias_ecs_create_entity(
+    alias_ecs_Instance     * instance
+  , alias_ecs_EntityHandle * entity_ptr
+) {
   uint32_t index;
 
   if(instance->entity.free_indexes.length > 0) {
-    index = *Vector_pop(&instance->entity.free_indexes);
+    index = *alias_ecs_Vector_pop(&instance->entity.free_indexes);
   } else {
     index = instance->entity.length++;
   }
@@ -37,14 +44,17 @@ aeResult alias_ecs_entity_create(aeInstance instance, aeEntity * entity_ptr) {
 
   *entity_ptr = ((uint64_t)generation << 32) | (uint64_t)index;
 
-  return aeSUCCESS;
+  return ALIAS_ECS_SUCCESS;
 }
 
-aeResult alias_ecs_entity_free(aeInstance instance, uint32_t entity_id) {
+alias_ecs_Result alias_ecs_free_entity(
+    alias_ecs_Instance * instance
+  , uint32_t             entity_id
+) {
   ++instance->entity.generation[entity_id];
-  return_if_ERROR(Vector_space_for(instance, &instance->entity.free_indexes, 1));
-  *Vector_push(&instance->entity.free_indexes) = entity_id;
-  return aeSUCCESS;
+  return_if_ERROR(alias_ecs_Vector_space_for(instance, &instance->entity.free_indexes, 1));
+  *alias_ecs_Vector_push(&instance->entity.free_indexes) = entity_id;
+  return ALIAS_ECS_SUCCESS;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -55,20 +65,24 @@ static int _compar_component_index(const void * ap, const void * bp) {
   return a - b;
 }
 
-aeResult aeSpawn(aeInstance instance, const aeEntitySpawnInfo * spawn_info, aeEntity * entities_ptr) {
+alias_ecs_Result alias_ecs_spawn(
+    alias_ecs_Instance              * instance
+  , const alias_ecs_EntitySpawnInfo * spawn_info
+  , alias_ecs_EntityHandle          * entities_ptr
+) {
   return_ERROR_INVALID_ARGUMENT_if(instance == NULL);
   return_ERROR_INVALID_ARGUMENT_if(spawn_info == NULL);
 
   return_ERROR_INVALID_ARGUMENT_if(spawn_info->count == 0);
 
   uint32_t layer_index = UINT32_MAX;
-  if(spawn_info->layer != aeINVALID_LAYER) {
-    return_if_ERROR(alias_ecs_layer_validate(instance, spawn_info->layer, &layer_index));
+  if(spawn_info->layer != ALIAS_ECS_INVALID_LAYER) {
+    return_if_ERROR(alias_ecs_validate_layer_handle(instance, spawn_info->layer, &layer_index));
   }
 
-  aeArchetype archetype_index;
+  uint32_t archetype_index;
   {
-    struct aeComponentSet components;
+    alias_ecs_ComponentSet components;
     components.count = spawn_info->num_components;
     ALLOC(instance, components.count, components.index);
     for(uint32_t i = 0; i < components.count; ++i) {
@@ -77,7 +91,7 @@ aeResult aeSpawn(aeInstance instance, const aeEntitySpawnInfo * spawn_info, aeEn
     qsort(components.index, components.count, sizeof(*components.index), _compar_component_index);
     return_if_ERROR(alias_ecs_resolve_archetype(instance, components, &archetype_index));
   }
-  struct aeArchetypeData * archetype = &instance->archetype.data[archetype_index];
+  alias_ecs_Archetype * archetype = &instance->archetype.data[archetype_index];
 
   int free_out_entities = entities_ptr == NULL;
   if(free_out_entities) {
@@ -85,23 +99,23 @@ aeResult aeSpawn(aeInstance instance, const aeEntitySpawnInfo * spawn_info, aeEn
   }
 
   for(uint32_t i = 0; i < spawn_info->count; i++) {
-    aeEntity entity;
+    alias_ecs_EntityHandle entity;
     uint32_t entity_index;
 
-    return_if_ERROR(alias_ecs_entity_create(instance, &entity));
-    return_if_ERROR(alias_ecs_entity_validate(instance, entity, &entity_index));
+    return_if_ERROR(alias_ecs_create_entity(instance, &entity));
+    return_if_ERROR(alias_ecs_validate_entity_handle(instance, entity, &entity_index));
     if(layer_index != UINT32_MAX) {
-      return_if_ERROR(alias_ecs_set_layer(instance, layer_index, entity_index));
+      return_if_ERROR(alias_ecs_set_entity_layer(instance, layer_index, entity_index));
     }
-    return_if_ERROR(alias_ecs_set_archetype(instance, archetype_index, entity_index));
+    return_if_ERROR(alias_ecs_set_entity_archetype(instance, archetype_index, entity_index));
 
     entities_ptr[i] = entity;
   }
 
   for(uint32_t i = 0; i < spawn_info->num_components; i++) {
-    aeEntitySpawnComponent spawn_component = spawn_info->components[i];
+    alias_ecs_EntitySpawnComponent spawn_component = spawn_info->components[i];
 
-    uint32_t component_index = aeComponentSet_order_of(&archetype->components, spawn_component.component);
+    uint32_t component_index = alias_ecs_ComponentSet_order_of(&archetype->components, spawn_component.component);
 
     // ASSERT(component_index != UINT32_MAX);
 
@@ -127,6 +141,53 @@ aeResult aeSpawn(aeInstance instance, const aeEntitySpawnInfo * spawn_info, aeEn
     FREE(instance, spawn_info->count, entities_ptr);
   }
   
-  return aeSUCCESS;
+  return ALIAS_ECS_SUCCESS;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+alias_ecs_Result alias_ecs_add_component_to_entity(
+    alias_ecs_Instance        * instance
+  , alias_ecs_EntityHandle      entity
+  , alias_ecs_ComponentHandle   component_handle
+  , const void                * data
+) {
+  uint32_t entity_index;
+  
+  return_ERROR_INVALID_ARGUMENT_if(instance == NULL);
+  return_if_ERROR(alias_ecs_validate_entity_handle(instance, entity, &entity_index));
+  return_ERROR_INVALID_ARGUMENT_if(component_handle >= instance->component.length);
+
+  const alias_ecs_Component * component = &instance->component.data[component_handle];
+  return_ERROR_INVALID_ARGUMENT_if(component->non_null && data == NULL);
+
+  alias_ecs_Archetype * archetype = ENTITY_ARCHETYPE_DATA(instance, entity);
+
+  uint32_t component_index = alias_ecs_ComponentSet_order_of(&archetype->components, component_handle);
+
+  if(component_index != UINT32_MAX) {
+    return ALIAS_ECS_ERROR_COMPONENT_EXISTS;
+  }
+
+  alias_ecs_ArchetypeHandle new_archetype;
+  {
+    alias_ecs_ComponentSet new_components;
+    return_if_ERROR(alias_ecs_ComponentSet_add(instance, &new_components, &archetype->components, component_handle));
+
+    return_if_ERROR(alias_ecs_resolve_archetype(instance, new_components, &new_archetype));
+
+    // alias_ecs_resolve_archetype 'consumes' new components
+  }
+
+  alias_ecs_set_entity_archetype(instance, entity, new_archetype);
+
+  component_index = alias_ecs_ComponentSet_order_of(&instance->archetype.data[new_archetype].components, component_handle);
+
+  if(data != NULL) {
+    memcpy(alias_ecs_write(instance, entity_index, component_index), data, component->size);
+  } else {
+    memset(alias_ecs_write(instance, entity_index, component_index), 0, component->size);
+  }
+
+  return ALIAS_ECS_SUCCESS;
+}

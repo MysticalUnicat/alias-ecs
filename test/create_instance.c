@@ -1,24 +1,24 @@
 #include "local.h"
 
 TEST(create_instance, "aeCreateInstance and it's possible error conditions") {
-  aeInstance instance;
-  aliasApplicationMemoryCallbacks memory_callbacks = { 0 };
+  alias_ecs_Instance * instance;
+  alias_MemoryAllocationCallback memory_callback = { 0, 0 };
 
-  TEST_EQ(aeCreateInstance(NULL, NULL), aeERROR_INVALID_ARGUMENT, "expected to require result pointer to instance");
+  TEST_EQ(alias_ecs_create_instance(NULL, NULL), ALIAS_ECS_ERROR_INVALID_ARGUMENT, "expected to require result pointer to instance");
 
-  TEST_EQ(aeCreateInstance(&memory_callbacks, NULL), aeERROR_INVALID_ARGUMENT, "expected to require result pointer to instance");
+  TEST_EQ(alias_ecs_create_instance(&memory_callback, NULL), ALIAS_ECS_ERROR_INVALID_ARGUMENT, "expected to require result pointer to instance");
 
   // default 'internal' allocator
-  TEST_EQ(aeCreateInstance(NULL, &instance), aeSUCCESS, "unexpected error when creating instance (internal allocator)");
-  aeDestroyInstance(instance);
+  TEST_EQ(alias_ecs_create_instance(NULL, &instance), ALIAS_ECS_SUCCESS, "unexpected error when creating instance (internal allocator)");
+  alias_ecs_destroy_instance(instance);
 
   // stub allocator
-  TEST_EQ(aeCreateInstance(&g_stub_allocator.cb, &instance), aeSUCCESS, "unexpected error when creating instance (test stub allocator)");
-  aeDestroyInstance(instance);
+  TEST_EQ(alias_ecs_create_instance(&g_stub_allocator.cb, &instance), ALIAS_ECS_SUCCESS, "unexpected error when creating instance (test stub allocator)");
+  alias_ecs_destroy_instance(instance);
 
   // ... then stub allocator fail
   g_stub_allocator.fail = 1;
-  TEST_EQ(aeCreateInstance(&g_stub_allocator.cb, &instance), aeERROR_OUT_OF_MEMORY, "expected error when creating instance (bad allocator)");
+  TEST_EQ(alias_ecs_create_instance(&g_stub_allocator.cb, &instance), ALIAS_ECS_ERROR_OUT_OF_MEMORY, "expected error when creating instance (bad allocator)");
   g_stub_allocator.fail = 0;
 }
 

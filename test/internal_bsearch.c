@@ -20,11 +20,11 @@ TEST(internal_bsearch, "internal bsearch function testing") {
     sorted[j] = rand();
   }
 
-  alias_ecs_quicksort(sorted, COUNT, sizeof(*sorted), _compar_uint32_ud, NULL);
+  alias_ecs_quicksort(sorted, COUNT, sizeof(*sorted), (alias_ecs_CompareCB) { _compar_uint32_ud, NULL });
 
   for(uint32_t i = 0; i < COUNT; i++) {
     uint32_t key = sorted[i];
-    uint32_t * found = (uint32_t *)alias_ecs_bsearch(&key, sorted, COUNT, sizeof(*sorted), _compar_uint32_ud, NULL);
+    uint32_t * found = (uint32_t *)alias_ecs_bsearch(&key, sorted, COUNT, sizeof(*sorted), (alias_ecs_CompareCB) { _compar_uint32_ud, NULL });
     TEST_NE(found, NULL, "found wasnt");
     TEST_EQ(*found, key, "invalid result given %u expected %u", *found, key);
   }

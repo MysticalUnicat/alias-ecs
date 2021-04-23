@@ -2,29 +2,47 @@
 
 #include <string.h>
 
-aeResult alias_ecs_malloc(aeInstance instance, size_t size, size_t alignment, void ** out_ptr) {
-  *out_ptr =instance->mem.malloc(instance->mem.user_data, size, alignment);
+alias_ecs_Result alias_ecs_malloc(
+    alias_ecs_Instance * instance
+  , size_t               size
+  , size_t               alignment
+  , void *             * out_ptr
+) {
+  *out_ptr = alias_Closure_call(&instance->memory_allocation_cb, NULL, 0, size, alignment);
   if(*out_ptr == NULL) {
-    return aeERROR_OUT_OF_MEMORY;
+    // TODO make effort to cleanup old archetype blocks
+    return ALIAS_ECS_ERROR_OUT_OF_MEMORY;
   }
   memset(*out_ptr, 0, size);
-  return aeSUCCESS;
+  return ALIAS_ECS_SUCCESS;
 }
 
-aeResult alias_ecs_realloc(aeInstance instance, void * ptr, size_t old_size, size_t new_size, size_t alignment, void ** out_ptr) {
-  *out_ptr = instance->mem.realloc(instance->mem.user_data, ptr, old_size, new_size, alignment);
+alias_ecs_Result alias_ecs_realloc(
+    alias_ecs_Instance * instance
+  , void               * ptr
+  , size_t               old_size
+  , size_t               new_size
+  , size_t               alignment
+  , void *             * out_ptr
+) {
+  *out_ptr = alias_Closure_call(&instance->memory_allocation_cb, ptr, old_size, new_size, alignment);
   if(*out_ptr == NULL) {
-    return aeERROR_OUT_OF_MEMORY;
+    return ALIAS_ECS_ERROR_OUT_OF_MEMORY;
   }
   if(old_size < new_size) {
     memset(((unsigned char *)*out_ptr) + old_size, 0, new_size - old_size);
   }
-  return aeSUCCESS;
+  return ALIAS_ECS_SUCCESS;
 }
 
-void alias_ecs_free(aeInstance instance, void * ptr, size_t size, size_t alignment) {
+void alias_ecs_free(
+    alias_ecs_Instance * instance
+  , void               * ptr
+  , size_t               size
+  , size_t               alignment
+) {
   if(ptr != NULL && size > 0) {
-    instance->mem.free(instance->mem.user_data, ptr, size, alignment);
+    alias_Closure_call(&instance->memory_allocation_cb, ptr, size, 0, alignment);
   }
 }
 
@@ -34,7 +52,12 @@ void alias_ecs_free(aeInstance instance, void * ptr, size_t size, size_t alignme
 #define OPTIMIZED
 #define QSORT_LINEAR_SORT_LIMIT 16
 
-static inline void _swap(uint8_t * base, size_t size, size_t i, size_t j) {
+static inline void _swap(
+    uint8_t * base
+  , size_t    size
+  , size_t    i
+  , size_t    j
+) {
   if(i == j) {
     return;
   }
@@ -62,21 +85,36 @@ enum PartitionScheme {
   Hoare
 };
 
-static int _cmp(const uint8_t * base, size_t size, size_t i, size_t j, int (*compar)(void *, const void *, const void *), void * ud) {
+static int _cmp(
+    const uint8_t       * base
+  , size_t                size
+  , size_t                i
+  , size_t                j
+  , alias_ecs_CompareCB   cb
+) {
   if(i == j) {
     return 0;
   }
-  
-  return compar(ud, base + (size * i), base + (size * j));
+  return alias_Closure_call(&cb, base + (size * i), base + (size * j));
 }
-#define CMP(I, OP, J) (_cmp(base, size, I, J, compar, ud) OP 0)
+#define CMP(I, OP, J) (_cmp(base, size, I, J, cb) OP 0)
 
-static inline size_t size_t_min(size_t a, size_t b) {
+static inline size_t size_t_min(
+    size_t a
+  , size_t b
+) {
   return a < b ? a : b;
 }
 
-static size_t _partition(enum PivotScheme pivot_scheme, enum PartitionScheme partition_scheme, uint8_t * base, size_t size, size_t lo, size_t hi
-                        , int (*compar)(void *, const void *, const void *), void * ud) {
+static size_t _partition(
+    enum PivotScheme       pivot_scheme
+  , enum PartitionScheme   partition_scheme
+  , uint8_t              * base
+  , size_t                 size
+  , size_t                 lo
+  , size_t                 hi
+  , alias_ecs_CompareCB cb
+) {
   size_t pivot, mid = lo + (hi - lo)/2;
 
   switch(pivot_scheme) {
@@ -143,19 +181,29 @@ static size_t _partition(enum PivotScheme pivot_scheme, enum PartitionScheme par
   return 0;
 }
 
-typedef void (*SortFn)(uint8_t * base, size_t size, size_t lo, size_t hi, int (*compar)(void *, const void *, const void *), void *);
-
 #ifndef OPTIMIZED
-static void _quicksort(uint8_t * base, size_t size, size_t lo, size_t hi, int (*compar)(void *, const void *, const void *), void * ud) {
+static void _quicksort(
+    uint8_t * base
+  , size_t    size
+  , size_t    lo
+  , size_t    hi
+  , alias_ecs_CompareCB cb
+) {
   if(lo >= hi) {
     return;
   }
-  size_t pivot = _partition(PivotMid, Hoare, base, size, lo, hi, compar, ud);
-  _quicksort(base, size, lo, pivot ? pivot - 1 : pivot, compar, ud);
-  _quicksort(base, size, pivot + 1, hi, compar, ud);
+  size_t pivot = _partition(PivotMid, Hoare, base, size, lo, hi, cb);
+  _quicksort(base, size, lo, pivot ? pivot - 1 : pivot, cb);
+  _quicksort(base, size, pivot + 1, hi, cb);
 }
 #else
-static void _insertion_sort(uint8_t * base, size_t size, size_t lo, size_t hi, int (*compar)(void *, const void *, const void *), void * ud) {
+static void _insertion_sort(
+    uint8_t * base
+  , size_t    size
+  , size_t    lo
+  , size_t    hi
+  , alias_ecs_CompareCB cb
+) {
   size_t i = lo + 1;
   while(i <= hi) {
     size_t j = i;
@@ -167,7 +215,13 @@ static void _insertion_sort(uint8_t * base, size_t size, size_t lo, size_t hi, i
   }
 }
 
-static void _quicksort(uint8_t * base, size_t size, size_t lo, size_t hi, int (*compar)(void *, const void *, const void *), void * ud) {
+static void _quicksort(
+    uint8_t             * base
+  , size_t                size
+  , size_t                lo
+  , size_t                hi
+  , alias_ecs_CompareCB   cb
+) {
 again:
   if(lo >= hi) {
     return;
@@ -175,34 +229,45 @@ again:
 
   // optimization: perform linear insertion sort on small sub arrays
   if(hi - lo < QSORT_LINEAR_SORT_LIMIT) {
-    _insertion_sort(base, size, lo, hi, compar, ud);
+    _insertion_sort(base, size, lo, hi, cb);
     return;
   }
 
-  size_t pivot = _partition(PivotHi, Lumuto, base, size, lo, hi, compar, ud);
+  size_t pivot = _partition(PivotHi, Lumuto, base, size, lo, hi, cb);
   
   // optimization: sort the smaller subarray first (in the call stack) then go to the top with the other side
   size_t sub[2][2] = { {    lo, pivot ? pivot - 1 : lo }
                      , { pivot + 1,    hi }
                      };
   size_t shortest = (sub[0][1] - sub[0][0] > sub[1][1] - sub[1][0]);
-  _quicksort(base, size, sub[shortest][0], sub[shortest][1], compar, ud);
+  _quicksort(base, size, sub[shortest][0], sub[shortest][1], cb);
   lo = sub[!shortest][0];
   hi = sub[!shortest][1];
   goto again;
 }
 #endif
 
-void alias_ecs_quicksort(void * base, size_t num, size_t size, int (*compar)(void *, const void *, const void *), void * ud) {
-  if(num == 0 || size == 0 || base == NULL || compar == NULL) {
+void alias_ecs_quicksort(
+    void                * base
+  , size_t                num
+  , size_t                size
+  , alias_ecs_CompareCB   cb
+) {
+  if(num == 0 || size == 0 || base == NULL) {
     return;
   }
-  _quicksort((uint8_t *)base, size, 0, num - 1, compar, ud);
+  _quicksort((uint8_t *)base, size, 0, num - 1, cb);
 }
 
 // naive bsearch
-void * alias_ecs_bsearch(const void * key, const void * base, size_t num, size_t size, int (*compar)(void *, const void *, const void *), void * ud) {
-  if(key == NULL || base == NULL || num == 0 || size == 0 || compar == NULL) {
+void * alias_ecs_bsearch(
+    const void          * key
+  , const void          * base
+  , size_t                num
+  , size_t                size
+  , alias_ecs_CompareCB   cb
+) {
+  if(key == NULL || base == NULL || num == 0 || size == 0) {
     return NULL;
   }
   const uint8_t * b = (const uint8_t *)base;
@@ -211,7 +276,7 @@ void * alias_ecs_bsearch(const void * key, const void * base, size_t num, size_t
   while(lo <= hi) {
     size_t mid = lo + (hi - lo)/2;
     const void * item = b + mid * size;
-    int cmp = compar(ud, key, item);
+    int cmp = alias_Closure_call(&cb, key, item);
     if(cmp > 0) {
       lo = mid + 1;
     } else if(cmp < 0) {

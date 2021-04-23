@@ -14,34 +14,40 @@ static int _compare_components( uint32_t a_num_components, const uint32_t * a_co
 }
 
 static int _sort(void * ud, const void * ap, const void * bp) {
-  aeInstance instance = (aeInstance)ud;
+  alias_ecs_Instance * instance = (alias_ecs_Instance *)ud;
   uint32_t a_index = *(uint32_t *)ap;
   uint32_t b_index = *(uint32_t *)bp;
-  struct aeArchetypeData * a = &instance->archetype.data[a_index];
-  struct aeArchetypeData * b = &instance->archetype.data[b_index];
+  alias_ecs_Archetype * a = &instance->archetype.data[a_index];
+  alias_ecs_Archetype * b = &instance->archetype.data[b_index];
   return _compare_components(a->components.count, a->components.index, b->components.count, b->components.index);
 }
 
 static int _search(void * ud, const void * ap, const void * bp) {
-  aeInstance instance = (aeInstance)ud;
-  const struct aeComponentSet * components = (const struct aeComponentSet *)ap;
+  alias_ecs_Instance * instance = (alias_ecs_Instance *)ud;
+  const alias_ecs_ComponentSet * components = (const alias_ecs_ComponentSet *)ap;
   uint32_t archetype_index = *(uint32_t *)bp;
-  const struct aeArchetypeData * archetype = &instance->archetype.data[archetype_index];
+  const alias_ecs_Archetype * archetype = &instance->archetype.data[archetype_index];
   return _compare_components(components->count, components->index, archetype->components.count, archetype->components.index);
 }
 
-aeResult alias_ecs_resolve_archetype(aeInstance instance, struct aeComponentSet components, aeArchetype * out_ptr) {
-  uint32_t * index_ptr = alias_ecs_bsearch( &components
-                                          , instance->archetype.components_index
-                                          , instance->archetype.length
-                                          , sizeof(*instance->archetype.components_index)
-                                          , _search
-                                          , instance);
+alias_ecs_Result alias_ecs_resolve_archetype(
+    alias_ecs_Instance        * instance
+  , alias_ecs_ComponentSet      components
+  , alias_ecs_ArchetypeHandle * out_ptr
+) {
+
+  uint32_t * index_ptr = alias_ecs_bsearch(
+      &components
+    , instance->archetype.components_index
+    , instance->archetype.length
+    , sizeof(*instance->archetype.components_index)
+    , (alias_ecs_CompareCB) { _search, instance }
+  );
 
   if(index_ptr != NULL) {
     *out_ptr = *index_ptr;
-    aeComponentSet_free(instance, &components);
-    return aeSUCCESS;
+    alias_ecs_ComponentSet_free(instance, &components);
+    return ALIAS_ECS_SUCCESS;
   }
 
   uint32_t archetype_index = instance->archetype.length++;
@@ -54,7 +60,7 @@ aeResult alias_ecs_resolve_archetype(aeInstance instance, struct aeComponentSet 
     instance->archetype.capacity = new_capacity;
   }
 
-  struct aeArchetypeData * archetype = &instance->archetype.data[archetype_index];
+  alias_ecs_Archetype * archetype = &instance->archetype.data[archetype_index];
 
   archetype->entity_size = sizeof(uint32_t); // space for the hidden 'component' that stores entity index
   archetype->components = components;
@@ -88,24 +94,28 @@ aeResult alias_ecs_resolve_archetype(aeInstance instance, struct aeComponentSet 
   }
 
   instance->archetype.components_index[archetype_index] = archetype_index;
-  alias_ecs_quicksort( instance->archetype.components_index
-                     , instance->archetype.length
-                     , sizeof(*instance->archetype.components_index)
-                     , _sort
-                     , instance);
+  alias_ecs_quicksort(
+      instance->archetype.components_index
+    , instance->archetype.length
+    , sizeof(*instance->archetype.components_index)
+    , (alias_ecs_CompareCB) { _sort, instance });
 
   *out_ptr = archetype_index;
 
-  return aeSUCCESS;
+  return ALIAS_ECS_SUCCESS;
 }
 
-static aeResult _allocate_code(aeInstance instance, uint32_t archetype_index, uint32_t * archetype_code) {
-  struct aeArchetypeData * archetype = &instance->archetype.data[archetype_index];
+static alias_ecs_Result _allocate_code(
+    alias_ecs_Instance * instance
+  , uint32_t             archetype_index
+  , uint32_t           * archetype_code
+) {
+  alias_ecs_Archetype * archetype = &instance->archetype.data[archetype_index];
 
   uint32_t index;
 
   if(archetype->free_indexes.length > 0) {
-    index = *Vector_pop(&archetype->free_indexes);
+    index = *alias_ecs_Vector_pop(&archetype->free_indexes);
   } else {
     index = archetype->next_index++;
   }
@@ -116,8 +126,8 @@ static aeResult _allocate_code(aeInstance instance, uint32_t archetype_index, ui
   // ASSERT(block_index <= archetype->num_blocks)
 
   if(block_index == archetype->blocks.length) {
-    Vector_set_capacity(instance, &archetype->blocks, block_index + 1);
-    *Vector_push(&archetype->blocks) = NULL;
+    alias_ecs_Vector_set_capacity(instance, &archetype->blocks, block_index + 1);
+    *alias_ecs_Vector_push(&archetype->blocks) = NULL;
   }
 
   if(archetype->blocks.data[block_index] == NULL) {
@@ -126,24 +136,31 @@ static aeResult _allocate_code(aeInstance instance, uint32_t archetype_index, ui
 
   *archetype_code = (block_index << 16) | block_offset;
 
-  return aeSUCCESS;
+  return ALIAS_ECS_SUCCESS;
 }
 
-static aeResult _free_code(aeInstance instance, uint32_t archetype_index, uint32_t archetype_code) {
-  struct aeArchetypeData * archetype = &instance->archetype.data[archetype_index];
+static alias_ecs_Result _free_code(
+    alias_ecs_Instance * instance
+  , uint32_t             archetype_index
+  , uint32_t             archetype_code
+) {
+  alias_ecs_Archetype * archetype = &instance->archetype.data[archetype_index];
 
-  return_if_ERROR(Vector_space_for(instance, &archetype->free_indexes, 1));
+  return_if_ERROR(alias_ecs_Vector_space_for(instance, &archetype->free_indexes, 1));
   
   uint32_t block_index = archetype_code >> 16;
   uint32_t block_offset = archetype_code & 0xFFFF;
   uint32_t index = block_index * archetype->entities_per_block + block_offset;
 
-  *Vector_push(&archetype->free_indexes) = index;
+  *alias_ecs_Vector_push(&archetype->free_indexes) = index;
 
-  return aeSUCCESS;
+  return ALIAS_ECS_SUCCESS;
 }
 
-aeResult alias_ecs_unset_archetype(aeInstance instance, uint32_t entity_index) {
+alias_ecs_Result alias_ecs_unset_entity_archetype(
+    alias_ecs_Instance * instance
+  , uint32_t             entity_index
+) {
   uint32_t archetype_index = ENTITY_ARCHETYPE_INDEX(instance, entity_index);
   uint32_t archetype_code = ENTITY_ARCHETYPE_CODE(instance, entity_index);
   
@@ -154,8 +171,12 @@ aeResult alias_ecs_unset_archetype(aeInstance instance, uint32_t entity_index) {
   return _free_code(instance, archetype_index, archetype_code);
 }
 
-aeResult alias_ecs_set_archetype(aeInstance instance, uint32_t entity_index, uint32_t archetype_index) {
-  struct aeArchetypeData * archetype = &instance->archetype.data[archetype_index];
+alias_ecs_Result alias_ecs_set_entity_archetype(
+    alias_ecs_Instance * instance
+  , uint32_t             entity_index
+  , uint32_t             archetype_index
+) {
+  alias_ecs_Archetype * archetype = &instance->archetype.data[archetype_index];
 
   if(ENTITY_ARCHETYPE_INDEX(instance, entity_index) == 0) {
     uint32_t code;
@@ -163,11 +184,11 @@ aeResult alias_ecs_set_archetype(aeInstance instance, uint32_t entity_index, uin
     ENTITY_ARCHETYPE_INDEX(instance, entity_index) = archetype_index;
     ENTITY_ARCHETYPE_CODE(instance, entity_index) = code;
     ENTITY_DATA_ENTITY_INDEX(instance, entity_index) = entity_index;
-    return aeSUCCESS;
+    return ALIAS_ECS_SUCCESS;
   }
 
   uint32_t old_archetype_index = ENTITY_ARCHETYPE_INDEX(instance, entity_index);
-  struct aeArchetypeData * old_archetype = ENTITY_ARCHETYPE_DATA(instance, entity_index);
+  alias_ecs_Archetype * old_archetype = ENTITY_ARCHETYPE_DATA(instance, entity_index);
   uint32_t old_code = ENTITY_ARCHETYPE_CODE(instance, entity_index);
   uint32_t old_block_index = old_code >> 16;
   uint32_t old_block_offset = old_code & 0xFFFF;
@@ -187,7 +208,7 @@ aeResult alias_ecs_set_archetype(aeInstance instance, uint32_t entity_index, uin
   uint32_t w = 0;
 
   while(w < archetype->components.count && r < old_archetype->components.count) {
-    aeComponent c = archetype->components.index[w];
+    alias_ecs_ComponentHandle c = archetype->components.index[w];
 
     while(r < old_archetype->components.count && old_archetype->components.index[r] < c) {
       r++;
@@ -203,6 +224,6 @@ aeResult alias_ecs_set_archetype(aeInstance instance, uint32_t entity_index, uin
     w++;
   }
   
-  return aeSUCCESS;
+  return ALIAS_ECS_SUCCESS;
 }
 

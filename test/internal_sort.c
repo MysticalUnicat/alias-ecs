@@ -42,7 +42,7 @@ TEST(internal_sort, "internal sort function testing") {
 
     qsort(q_sorted, count, sizeof(*q_sorted), _compar_uint32);
     
-    alias_ecs_quicksort(a_sorted, count, sizeof(*a_sorted), _compar_uint32_ud, NULL);
+    alias_ecs_quicksort(a_sorted, count, sizeof(*a_sorted), (alias_ecs_CompareCB) { _compar_uint32_ud, NULL });
 
     if(!_is_same(count, a_sorted, q_sorted)) {
       free(q_sorted);

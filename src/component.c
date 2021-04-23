@@ -1,6 +1,10 @@
 #include "local.h"
 
-aeResult aeRegisterComponent(aeInstance instance, const aeComponentCreateInfo * create_info, aeComponent * component_ptr) {
+alias_ecs_Result alias_ecs_register_component(
+    alias_ecs_Instance                  * instance
+  , const alias_ecs_ComponentCreateInfo * create_info
+  , alias_ecs_ComponentHandle           * component_ptr
+) {
   return_ERROR_INVALID_ARGUMENT_if(instance == NULL);
   return_ERROR_INVALID_ARGUMENT_if(create_info == NULL);
   return_ERROR_INVALID_ARGUMENT_if(component_ptr == NULL);
@@ -11,26 +15,27 @@ aeResult aeRegisterComponent(aeInstance instance, const aeComponentCreateInfo * 
     return_ERROR_INVALID_ARGUMENT_if(create_info->required_components[i] >= instance->component.length);
   }
 
-  aeComponent * required_components = NULL;
+  alias_ecs_ComponentHandle * required_components = NULL;
 
   if(create_info->num_required_components > 0) {
     ALLOC(instance, create_info->num_required_components, required_components);
     memcpy(required_components, create_info->required_components, create_info->num_required_components * sizeof(*required_components));
   }
 
-  struct aeComponentData component_data =
-    { .size = create_info->size
+  struct alias_ecs_Component component_data =
+    { .flags = create_info->flags
+    , .size = create_info->size
     , .num_required_components = create_info->num_required_components
     , .required_components = required_components
   };
 
-  return_if_ERROR(Vector_space_for(instance, &instance->component, 1));
+  return_if_ERROR(alias_ecs_Vector_space_for(instance, &instance->component, 1));
 
   *component_ptr = instance->component.length;
 
-  *Vector_push(&instance->component) = component_data;
+  *alias_ecs_Vector_push(&instance->component) = component_data;
 
-  return aeSUCCESS;
+  return ALIAS_ECS_SUCCESS;
 }
 
 static int _compar_component_index(const void * ap, const void * bp) {
@@ -39,14 +44,18 @@ static int _compar_component_index(const void * ap, const void * bp) {
   return a - b;
 }
 
-aeResult _aeComponentSet_init( aeInstance instance, struct aeComponentSet * set
-                             , uint32_t a_count, const uint32_t * a_component_indexes
-                             , uint32_t b_count, const uint32_t * b_component_indexes
-                             ) {
+alias_ecs_Result alias_ecs_ComponentSet_init_0(
+    alias_ecs_Instance     * instance
+  , alias_ecs_ComponentSet * set
+  , uint32_t                 a_count
+  , const uint32_t         * a_component_indexes
+  , uint32_t                 b_count
+  , const uint32_t         * b_component_indexes
+) {
   set->count = a_count + b_count;
   set->index = NULL;
   if(set->count == 0) {
-    return aeSUCCESS;
+    return ALIAS_ECS_SUCCESS;
   }
   ALLOC(instance, set->count, set->index);
   if(a_count > 0) {
@@ -56,30 +65,48 @@ aeResult _aeComponentSet_init( aeInstance instance, struct aeComponentSet * set
     memcpy(set->index + a_count, b_component_indexes, b_count * sizeof(*set->index));
   }
   qsort(set->index, set->count, sizeof(*set->index), _compar_component_index);
-  return aeSUCCESS;
+  return ALIAS_ECS_SUCCESS;
 }
 
-aeResult aeComponentSet_init(aeInstance instance, struct aeComponentSet * set, uint32_t count, const aeComponent * components) {
+alias_ecs_Result alias_ecs_ComponentSet_init(
+    alias_ecs_Instance              * instance
+  , alias_ecs_ComponentSet          * set
+  , uint32_t                          count
+  , const alias_ecs_ComponentHandle * components
+) {
   // if aeComponent ever changes, need to translate to the indexes
-  return _aeComponentSet_init(instance, set, count, components, 0, NULL);
+  return alias_ecs_ComponentSet_init_0(instance, set, count, components, 0, NULL);
 }
 
-aeResult aeComponentSet_add(aeInstance instance, struct aeComponentSet * dst, const struct aeComponentSet * src, aeComponent component) {
+alias_ecs_Result alias_ecs_ComponentSet_add(
+    alias_ecs_Instance           * instance
+  , alias_ecs_ComponentSet       * dst
+  , const alias_ecs_ComponentSet * src
+  , alias_ecs_ComponentHandle      component
+) {
   // if aeComponent ever changes, need to translate to the indexes
-  return _aeComponentSet_init(instance, dst, src->count, src->index, 1, &component);
+  return alias_ecs_ComponentSet_init_0(instance, dst, src->count, src->index, 1, &component);
 }
 
-aeResult aeComponentset_remove(aeInstance instance, struct aeComponentSet * dst, const struct aeComponentSet * src, aeComponent component) {
+alias_ecs_Result alias_ecs_Componentset_remove(
+    alias_ecs_Instance           * instance
+  , alias_ecs_ComponentSet       * dst
+  , const alias_ecs_ComponentSet * src
+  , alias_ecs_ComponentHandle      component
+) {
   // if aeComponent ever changes, need to translate to the indexes
-  uint32_t order = aeComponentSet_order_of(src, component);
+  uint32_t order = alias_ecs_ComponentSet_order_of(src, component);
   if(order == UINT32_MAX) {
-    return _aeComponentSet_init(instance, dst, src->count, src->index, 0, NULL);
+    return alias_ecs_ComponentSet_init_0(instance, dst, src->count, src->index, 0, NULL);
   } else {
-    return _aeComponentSet_init(instance, dst, order, src->index, src->count - order - 1, src->index + order + 1);
+    return alias_ecs_ComponentSet_init_0(instance, dst, order, src->index, src->count - order - 1, src->index + order + 1);
   }
 }
 
-uint32_t aeComponentSet_order_of(const struct aeComponentSet * set, aeComponent component) {
+uint32_t alias_ecs_ComponentSet_order_of(
+    const alias_ecs_ComponentSet * set
+  , alias_ecs_ComponentHandle      component
+) {
   // if aeComponent ever changes, need to translate to the indexes
   uint32_t * p = bsearch(&component, set->index, set->count, sizeof(*set->index), _compar_component_index);
   if(p == NULL) {
@@ -88,11 +115,17 @@ uint32_t aeComponentSet_order_of(const struct aeComponentSet * set, aeComponent 
   return (uint32_t)(p - set->index);
 }
 
-int aeComponentSet_contains(const struct aeComponentSet * set, aeComponent component) {
-  return aeComponentSet_order_of(set, component) != UINT32_MAX;
+int alias_ecs_ComponentSet_contains(
+    const struct alias_ecs_ComponentSet * set
+  , alias_ecs_ComponentHandle             component
+) {
+  return alias_ecs_ComponentSet_order_of(set, component) != UINT32_MAX;
 }
 
-int aeComponentSet_is_subset(const struct aeComponentSet * set, const struct aeComponentSet * subset) {
+int alias_ecs_ComponentSet_is_subset(
+    const alias_ecs_ComponentSet * set
+  , const alias_ecs_ComponentSet * subset
+) {
   for(uint32_t s = 0, ss = 0; ss < subset->count; ++ss) {
     while(s < set->count && set->index[s] < subset->index[ss]) s++;
     if(s >= set->count) {
@@ -105,8 +138,12 @@ int aeComponentSet_is_subset(const struct aeComponentSet * set, const struct aeC
   return 1;
 }
 
-void aeComponentSet_free(aeInstance instance, struct aeComponentSet * set) {
+void alias_ecs_ComponentSet_free(
+    alias_ecs_Instance     * instance
+  , alias_ecs_ComponentSet * set
+) {
   if(set->index != NULL) {
     FREE(instance, set->count, set->index);
   }
 }
+
