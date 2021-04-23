@@ -273,7 +273,7 @@ void * alias_ecs_bsearch(
   const uint8_t * b = (const uint8_t *)base;
   size_t lo = 0;
   size_t hi = num - 1;
-  while(lo <= hi) {
+  while(lo <= hi && hi != SIZE_MAX) {
     size_t mid = lo + (hi - lo)/2;
     const void * item = b + mid * size;
     int cmp = alias_Closure_call(&cb, key, item);

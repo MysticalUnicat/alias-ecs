@@ -191,3 +191,40 @@ alias_ecs_Result alias_ecs_add_component_to_entity(
 
   return ALIAS_ECS_SUCCESS;
 }
+
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+alias_ecs_Result alias_ecs_remove_component_from_entity(
+    alias_ecs_Instance        * instance
+  , alias_ecs_EntityHandle      entity
+  , alias_ecs_ComponentHandle   component_handle
+) {
+  uint32_t entity_index;
+  
+  return_ERROR_INVALID_ARGUMENT_if(instance == NULL);
+  return_if_ERROR(alias_ecs_validate_entity_handle(instance, entity, &entity_index));
+  return_ERROR_INVALID_ARGUMENT_if(component_handle >= instance->component.length);
+
+  alias_ecs_Archetype * archetype = ENTITY_ARCHETYPE_DATA(instance, entity);
+
+  uint32_t component_index = alias_ecs_ComponentSet_order_of(&archetype->components, component_handle);
+
+  if(component_index == UINT32_MAX) {
+    return ALIAS_ECS_ERROR_COMPONENT_DOES_NOT_EXIST;
+  }
+
+  alias_ecs_ArchetypeHandle new_archetype;
+  {
+    alias_ecs_ComponentSet new_components;
+    return_if_ERROR(alias_ecs_ComponentSet_remove(instance, &new_components, &archetype->components, component_handle));
+
+    return_if_ERROR(alias_ecs_resolve_archetype(instance, new_components, &new_archetype));
+
+    // alias_ecs_resolve_archetype 'consumes' new components
+  }
+
+  alias_ecs_set_entity_archetype(instance, entity, new_archetype);
+
+  return ALIAS_ECS_SUCCESS;
+}
+

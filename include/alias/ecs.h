@@ -35,6 +35,7 @@ typedef enum alias_ecs_Result {
   ALIAS_ECS_ERROR_INVALID_ENTITY = -4,         ///< something inside is broken, should not happen
   ALIAS_ECS_ERROR_INVALID_LAYER = -5,          ///< something inside is broken, should not happen
   ALIAS_ECS_ERROR_COMPONENT_EXISTS = -6,
+  ALIAS_ECS_ERROR_COMPONENT_DOES_NOT_EXIST = -7,
 } alias_ecs_Result;
 /// @}
 

@@ -88,7 +88,7 @@ alias_ecs_Result alias_ecs_ComponentSet_add(
   return alias_ecs_ComponentSet_init_0(instance, dst, src->count, src->index, 1, &component);
 }
 
-alias_ecs_Result alias_ecs_Componentset_remove(
+alias_ecs_Result alias_ecs_ComponentSet_remove(
     alias_ecs_Instance           * instance
   , alias_ecs_ComponentSet       * dst
   , const alias_ecs_ComponentSet * src
