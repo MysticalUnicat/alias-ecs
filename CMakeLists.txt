@@ -35,6 +35,7 @@ add_library(alias-ecs STATIC
   src/instance.c
   src/layer.c
   src/memory.c
+  src/query.c
 )
 
 set_property(TARGET alias-ecs PROPERTY C_STANDARD 11)
@@ -60,6 +61,7 @@ if(ALIAS_ECS_BUILD_TESTS)
   alias_ecs_test(internal_bsearch)
   alias_ecs_test(internal_archetype)
   alias_ecs_test(spawn)
+  alias_ecs_test(query)
   alias_ecs_test(add_component)
   alias_ecs_test(remove_component)
 

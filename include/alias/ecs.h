@@ -10,12 +10,19 @@
 #define _ALIAS_CLOSURE
 #define alias_Closure(FN_T) struct { FN_T fn; void * ud; }
 #define alias_Closure_call(C, ...) (C)->fn((C)->ud, ## __VA_ARGS__)
+#define alias_Closure_is_empty(C) ((C)->fn == NULL)
+#define ALIAS_DECLARE_CLOSURE(NAME, RESULT_TYPE, ...) \
+  typedef RESULT_TYPE (* NAME##_function_type)(void *, ## __VA_ARGS__); \
+  typedef alias_Closure(NAME##_function_type) NAME;
 #endif
   
 #ifndef _ALIAS_APPLICATION_ALLOCATION_CALLBACK
 #define _ALIAS_APPLICATION_ALLOCATION_CALLBACK
-typedef void * (* alias_AllocationFn)(void * ud, void * ptr, size_t old_size, size_t new_size, size_t alignment);
-typedef alias_Closure(alias_AllocationFn) alias_MemoryAllocationCallback;
+//typedef void * (* alias_AllocationFn)(void * ud, void * ptr, size_t old_size, size_t new_size, size_t alignment);
+//typedef alias_Closure(alias_AllocationFn) alias_MemoryAllocationCallback;
+
+ALIAS_DECLARE_CLOSURE(alias_MemoryAllocationCallback, void *, void * ptr, size_t old_size, size_t new_size, size_t alignment)
+
 #endif // _ALIAS_APPLICATION_ALLOCATION_CALLBACK
 /// @}
 
@@ -130,10 +137,7 @@ alias_ecs_Result alias_ecs_destroy_layer(
   , const alias_ecs_LayerHandle   layer_handle
   , alias_ecs_LayerDestroyFlags   flags
 );
-/// @}
 
-/// @defgroup component Alias-ECS Component
-/// @{
 /** components are represented by a single 32-bit integer */
 
 typedef uint32_t alias_ecs_ComponentHandle;
@@ -178,10 +182,7 @@ alias_ecs_Result alias_ecs_register_component(
   , const alias_ecs_ComponentCreateInfo * create_info
   , alias_ecs_ComponentHandle           * component_ptr
 );
-/// @}
 
-/// @defgroup entity Alias-ECS Entity
-/// @{
 /** entities are represented by a single 64-bit integer */
 typedef uint64_t alias_ecs_EntityHandle;
 
@@ -282,18 +283,49 @@ alias_ecs_Result alias_ecs_despawn(
   , uint32_t                       num_entities
   , const alias_ecs_EntityHandle * entities
 );
-/// @}
 
-/// @defgroup query Alias-ECS Query
-/// @{
- 
-/// @}
+typedef struct alias_ecs_Query alias_ecs_Query;
 
-#ifdef ALIAS_ECS_SHORT_NAMES
-// neat idea?
-//#define aeInstance alias_ecs_Instance
-//#define ae_create_instance alias_ecs_create_instance
-#endif
+typedef void (* alias_ecs_QueryFN)(void * ud, alias_ecs_Instance * instance, alias_ecs_EntityHandle entity, void ** data);
+typedef alias_Closure(alias_ecs_QueryFN) alias_ecs_QueryCB;
+
+typedef enum alias_ecs_Filter {
+  ALIAS_ECS_FILTER_MODIFIED
+} alias_ecs_Filter;
+
+typedef struct alias_ecs_QueryFilterCreateInfo {
+  alias_ecs_Filter filter;
+  alias_ecs_ComponentHandle component;
+} alias_ecs_QueryFilterCreateInfo;
+
+typedef struct alias_ecs_QueryCreateInfo {
+  uint32_t num_write_components;
+  const alias_ecs_ComponentHandle * write_components;
+
+  uint32_t num_read_components;
+  const alias_ecs_ComponentHandle * read_components;
+
+  uint32_t num_filters;
+  alias_ecs_QueryFilterCreateInfo * filters;
+} alias_ecs_QueryCreateInfo;
+
+alias_ecs_Result alias_ecs_create_query(
+    alias_ecs_Instance              * instance
+  , const alias_ecs_QueryCreateInfo * create_info
+  , alias_ecs_Query *               * query_ptr
+);
+
+alias_ecs_Result alias_ecs_execute_query(
+    alias_ecs_Instance * instance
+  , alias_ecs_Query    * query
+  , alias_ecs_QueryCB    cb
+);
+
+void alias_ecs_destroy_query(
+    alias_ecs_Instance * instance
+  , alias_ecs_Query    * query
+);
+/// @}
 
 #endif // _ALIAS_ECS_H_
 

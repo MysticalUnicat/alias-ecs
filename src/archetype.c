@@ -1,8 +1,11 @@
 #include "local.h"
 
-static int _compare_components( uint32_t a_num_components, const uint32_t * a_component_indexes
-                              , uint32_t b_num_components, const uint32_t * b_component_indexes
-                              ) {
+static int _compare_components(
+    uint32_t         a_num_components
+  , const uint32_t * a_component_indexes
+  , uint32_t         b_num_components
+  , const uint32_t * b_component_indexes
+) {
   if(a_num_components != b_num_components) {
     return (int)a_num_components - (int)b_num_components;
   }
@@ -35,7 +38,6 @@ alias_ecs_Result alias_ecs_resolve_archetype(
   , alias_ecs_ComponentSet      components
   , alias_ecs_ArchetypeHandle * out_ptr
 ) {
-
   uint32_t * index_ptr = alias_ecs_bsearch(
       &components
     , instance->archetype.components_index

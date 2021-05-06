@@ -65,6 +65,7 @@ static int _compar_component_index(const void * ap, const void * bp) {
   return a - b;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------
 alias_ecs_Result alias_ecs_spawn(
     alias_ecs_Instance              * instance
   , const alias_ecs_EntitySpawnInfo * spawn_info
@@ -105,9 +106,9 @@ alias_ecs_Result alias_ecs_spawn(
     return_if_ERROR(alias_ecs_create_entity(instance, &entity));
     return_if_ERROR(alias_ecs_validate_entity_handle(instance, entity, &entity_index));
     if(layer_index != UINT32_MAX) {
-      return_if_ERROR(alias_ecs_set_entity_layer(instance, layer_index, entity_index));
+      return_if_ERROR(alias_ecs_set_entity_layer(instance, entity_index, layer_index));
     }
-    return_if_ERROR(alias_ecs_set_entity_archetype(instance, archetype_index, entity_index));
+    return_if_ERROR(alias_ecs_set_entity_archetype(instance, entity_index, archetype_index));
 
     entities_ptr[i] = entity;
   }
@@ -117,7 +118,7 @@ alias_ecs_Result alias_ecs_spawn(
 
     uint32_t component_index = alias_ecs_ComponentSet_order_of(&archetype->components, spawn_component.component);
 
-    // ASSERT(component_index != UINT32_MAX);
+    ASSERT(component_index != UINT32_MAX);
 
     uint32_t offset_size = archetype->offset_size[component_index];
     uint32_t component_offset = offset_size >> 16;

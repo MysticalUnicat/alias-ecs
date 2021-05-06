@@ -34,6 +34,9 @@ alias_ecs_Result alias_ecs_create_instance(
   memset(instance, 0, sizeof(*instance));
   instance->memory_allocation_cb = *memory_callback;
 
+  alias_ecs_EntityHandle dummy_entity;
+  alias_ecs_create_entity(instance, &dummy_entity);
+
   *instance_ptr = instance;
 
   return ALIAS_ECS_SUCCESS;

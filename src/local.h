@@ -98,6 +98,26 @@ struct alias_ecs_Instance {
   alias_ecs_Vector(alias_ecs_Component) component;
 };
 
+struct alias_ecs_Query {
+  alias_ecs_ComponentSet component_set;
+  uint32_t last_archetype_tested;
+
+  uint32_t component_count;
+
+  uint32_t first_component_read;
+
+  alias_ecs_ComponentHandle * component;
+  uint16_t * size;
+  uint8_t ** runtime;
+
+  uint32_t archetype_capacity;
+  uint32_t archetype_length;
+
+  alias_ecs_ArchetypeHandle * archetype;
+
+  uint16_t * offset;
+};
+
 // ============================================================================
 #define ENTITY_GENERATION(I, E)             (I)->entity.generation[E]
 #define ENTITy_LAYER_INDEX(I, E)            (I)->entity.layer_index[E]
@@ -139,6 +159,14 @@ static inline void * alias_ecs_write(
 // ============================================================================
 #define return_if_ERROR(C) do { alias_ecs_Result __r = C; if(__r < ALIAS_ECS_SUCCESS) return __r; } while(0)
 #define return_ERROR_INVALID_ARGUMENT_if(X) do { if(X) { return ALIAS_ECS_ERROR_INVALID_ARGUMENT; } } while(0)
+#define ASSERT(X) do { if(X) { return ALIAS_ECS_ERROR_INVALID_ARGUMENT; } } while(0)
+
+#if 1
+int printf(const char *, ...);
+#define TRACE(F, ...) printf("%s:%i - " F "\n", __FILE__, __LINE__, ## __VA_ARGS__)
+#else
+#define TRACE(F, ...)
+#endif
 
 // ============================================================================
 // memory.c
@@ -220,7 +248,7 @@ int alias_ecs_ComponentSet_contains(
   , alias_ecs_ComponentHandle      component
 );
 
-int alias_ecs_ComponentSet_intersects(
+int alias_ecs_ComponentSet_is_subset(
     const alias_ecs_ComponentSet * a
   , const alias_ecs_ComponentSet * b
 );
